@@ -4,10 +4,10 @@ export class NemotronClient {
     private model: string;
 
     constructor(apiKey?: string, model: string = "nvidia/nemotron-3-ultra") {
-        this.apiKey = apiKey || process.env.NVIDIA_API_KEY || "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";
+        this.apiKey = apiKey || process.env.NVIDIA_API_KEY || "";
         this.model = model;
         if (!this.apiKey) {
-            throw new Error("NVIDIA API Key is required for NemotronClient");
+            throw new Error("NVIDIA API Key is required for NemotronClient. Set process.env.NVIDIA_API_KEY.");
         }
     }
 
@@ -36,4 +36,5 @@ export class NemotronClient {
         return data.choices[0].message.content;
     }
 }
+
 
