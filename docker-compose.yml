@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - API_PORT=3000
+      - NVIDIA_API_KEY=${NVIDIA_API_KEY}
+      - API_SECRET=${API_SECRET}
+    restart: unless-stopped
