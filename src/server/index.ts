@@ -3,6 +3,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import { authMiddleware } from "./middleware/auth.js";
 import { agentsRouter } from "./routes/agents.js";
+import { toolsRouter } from "./routes/tools.js";
 
 dotenv.config();
 
@@ -36,6 +37,7 @@ app.use("/api", authMiddleware);
 
 // Route Modules
 app.use("/api/agents", agentsRouter);
+app.use("/api/tools", toolsRouter);
 
 // Global Error Handler
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
@@ -51,6 +53,7 @@ const server = app.listen(PORT, () => {
     console.log(`🚀 Standalone Enterprise API Server running on port ${PORT}`);
     console.log(`  └─ Health Check: http://localhost:${PORT}/health`);
     console.log(`  └─ Agents API:   http://localhost:${PORT}/api/agents`);
+    console.log(`  └─ Tools API:    http://localhost:${PORT}/api/tools/execute`);
 });
 
 const gracefulShutdown = (signal: string) => {
