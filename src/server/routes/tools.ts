@@ -1,7 +1,7 @@
 import { Router, Request, Response } from "express";
 import { PsychometricEngine } from "../../core/psychometricEngine.js";
 import { NemotronClient } from "../../core/nemotronClient.js";
-import { o3deBridge, CelestialBody, Vector3D } from "../../core/o3deBridge.js";
+import { physicsSimEngine, CelestialBody, Vector3D } from "../../core/physicsSimEngine.js";
 
 export const toolsRouter = Router();
 
@@ -29,9 +29,9 @@ toolsRouter.post("/execute", async (req: Request, res: Response) => {
 
         switch (toolName) {
             // ----------------------------------------------------------------
-            // 1. O3DE Scientific Astronomy N-Body Orbital Mechanics Tool
+            // 1. Scientific Astronomy N-Body Orbital Mechanics Tool
             // ----------------------------------------------------------------
-            case "o3de_astronomy_orbital_sim": {
+            case "astronomy_orbital_sim": {
                 const defaultBodies: CelestialBody[] = [
                     { id: "sun", name: "Star Alpha", mass: 1.989e30, position: { x: 0, y: 0, z: 0 }, velocity: { x: 0, y: 0, z: 0 }, radius: 696340 },
                     { id: "planet1", name: "Exoplanet B", mass: 5.972e24, position: { x: 1.496e11, y: 0, z: 0 }, velocity: { x: 0, y: 29780, z: 0 }, radius: 6371 }
@@ -42,19 +42,19 @@ toolsRouter.post("/execute", async (req: Request, res: Response) => {
                 result = {
                     simulationType: "N-Body Gravitational Dynamics",
                     timeStepSeconds: timeStep,
-                    bodies: o3deBridge.simulateOrbitalMechanics(bodies, timeStep)
+                    bodies: physicsSimEngine.simulateOrbitalMechanics(bodies, timeStep)
                 };
                 break;
             }
 
             // ----------------------------------------------------------------
-            // 2. O3DE Complex 3D Neural Structure & Connectome Tool
+            // 2. Complex 3D Neural Structure & Connectome Tool
             // ----------------------------------------------------------------
-            case "o3de_neural_structure_generate": {
+            case "neural_structure_generate": {
                 const layerCounts: number[] = (parameters?.layerCounts as number[]) || [12, 24, 16, 8];
                 const boundingBox: Vector3D = (parameters?.boundingBox as Vector3D) || { x: 100, y: 100, z: 200 };
                 
-                const neurons = o3deBridge.generate3DNeuralTopology(layerCounts, boundingBox);
+                const neurons = physicsSimEngine.generate3DNeuralTopology(layerCounts, boundingBox);
                 result = {
                     totalNeurons: neurons.length,
                     layers: layerCounts.length,
@@ -65,15 +65,15 @@ toolsRouter.post("/execute", async (req: Request, res: Response) => {
             }
 
             // ----------------------------------------------------------------
-            // 3. O3DE Skeletal Rigging & Inverse Kinematics (IK) Animation Tool
+            // 3. Skeletal Rigging & Inverse Kinematics (IK) Animation Tool
             // ----------------------------------------------------------------
-            case "o3de_rigging_animation_step": {
+            case "rigging_animation_step": {
                 const rootPos: Vector3D = (parameters?.rootPos as Vector3D) || { x: 0, y: 0, z: 0 };
                 const targetPos: Vector3D = (parameters?.targetPos as Vector3D) || { x: 10, y: 15, z: 5 };
                 const bone1Length = Number(parameters?.bone1Length || 10);
                 const bone2Length = Number(parameters?.bone2Length || 10);
 
-                const ikSolution = o3deBridge.solveInverseKinematics(rootPos, targetPos, bone1Length, bone2Length);
+                const ikSolution = physicsSimEngine.solveInverseKinematics(rootPos, targetPos, bone1Length, bone2Length);
                 result = {
                     rigType: "Two-Bone Articulated IK Rig",
                     targetPosition: targetPos,
@@ -86,20 +86,20 @@ toolsRouter.post("/execute", async (req: Request, res: Response) => {
             }
 
             // ----------------------------------------------------------------
-            // 4. O3DE PhysX Raycasting & Spatial Collision Tool
+            // 4. PhysX Raycasting & Spatial Collision Tool
             // ----------------------------------------------------------------
-            case "o3de_raycast_query": {
+            case "raycast_query": {
                 const rayOrigin: Vector3D = (parameters?.rayOrigin as Vector3D) || { x: 0, y: 0, z: -10 };
                 const rayDirection: Vector3D = (parameters?.rayDirection as Vector3D) || { x: 0, y: 0, z: 1 };
                 const sphereCenter: Vector3D = (parameters?.sphereCenter as Vector3D) || { x: 0, y: 0, z: 0 };
                 const sphereRadius = Number(parameters?.sphereRadius || 5);
 
-                result = o3deBridge.performRaycast(rayOrigin, rayDirection, sphereCenter, sphereRadius);
+                result = physicsSimEngine.performRaycast(rayOrigin, rayDirection, sphereCenter, sphereRadius);
                 break;
             }
 
             // ----------------------------------------------------------------
-            // 5. Existing Core Cognitive Tools
+            // 5. Core Cognitive Tools
             // ----------------------------------------------------------------
             case "psychometric_eval": {
                 const prompt = String(parameters?.prompt || "");

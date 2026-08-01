@@ -1,5 +1,5 @@
 /**
- * High-Precision Scientific 3D Engine Bridge for O3DE
+ * High-Precision Scientific 3D Engine Bridge
  * Supports Astronomical N-Body Dynamics, Complex Neural Structures,
  * Skeletal Rigging/Animation (IK/SLERP), and PhysX Rigid-Body Physics.
  */
@@ -53,7 +53,7 @@ export interface RigidBodyState {
     angularVelocity: Vector3D;
 }
 
-export class O3DEScientificEngineBridge {
+export class PhysicsSimEngine {
     private G: number = 6.67430e-11; // Gravitational constant m^3 kg^-1 s^-2
 
     // ------------------------------------------------------------------------
@@ -66,7 +66,6 @@ export class O3DEScientificEngineBridge {
     simulateOrbitalMechanics(bodies: CelestialBody[], timeStepSeconds: number): CelestialBody[] {
         const updatedBodies: CelestialBody[] = JSON.parse(JSON.stringify(bodies));
 
-        // Compute pairwise gravitational acceleration
         for (let i = 0; i < updatedBodies.length; i++) {
             let ax = 0, ay = 0, az = 0;
 
@@ -77,10 +76,9 @@ export class O3DEScientificEngineBridge {
                 const dy = updatedBodies[j].position.y - updatedBodies[i].position.y;
                 const dz = updatedBodies[j].position.z - updatedBodies[i].position.z;
                 
-                const distSq = dx * dx + dy * dy + dz * dz + 1e-9; // softening factor
+                const distSq = dx * dx + dy * dy + dz * dz + 1e-9;
                 const dist = Math.sqrt(distSq);
                 
-                // Force = G * m1 * m2 / r^2 -> Acceleration = G * m2 / r^2
                 const accel = (this.G * updatedBodies[j].mass) / distSq;
 
                 ax += accel * (dx / dist);
@@ -88,12 +86,10 @@ export class O3DEScientificEngineBridge {
                 az += accel * (dz / dist);
             }
 
-            // Update velocity: v = v + a * dt
             updatedBodies[i].velocity.x += ax * timeStepSeconds;
             updatedBodies[i].velocity.y += ay * timeStepSeconds;
             updatedBodies[i].velocity.z += az * timeStepSeconds;
 
-            // Update position: p = p + v * dt
             updatedBodies[i].position.x += updatedBodies[i].velocity.x * timeStepSeconds;
             updatedBodies[i].position.y += updatedBodies[i].velocity.y * timeStepSeconds;
             updatedBodies[i].position.z += updatedBodies[i].velocity.z * timeStepSeconds;
@@ -134,11 +130,9 @@ export class O3DEScientificEngineBridge {
             }
         });
 
-        // Form synaptic dendritic links between adjacent layers
         neurons.forEach(neuron => {
             if (neuron.layer < numLayers - 1) {
                 const nextLayerNeurons = neurons.filter(n => n.layer === neuron.layer + 1);
-                // Connect to 2-4 nearest target neurons
                 nextLayerNeurons.slice(0, Math.min(3, nextLayerNeurons.length)).forEach(target => {
                     neuron.dendriteTargetIds.push(target.id);
                 });
@@ -161,10 +155,8 @@ export class O3DEScientificEngineBridge {
         const dz = targetPos.z - rootPos.z;
         const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
 
-        // Clamp target distance within bone reach
         const reach = Math.min(dist, (bone1Length + bone2Length) * 0.999);
 
-        // Law of Cosines for IK angles
         const cosAngle2 = (reach * reach - bone1Length * bone1Length - bone2Length * bone2Length) / (2 * bone1Length * bone2Length);
         const joint2AngleRad = Math.acos(Math.max(-1, Math.min(1, cosAngle2)));
 
@@ -210,4 +202,4 @@ export class O3DEScientificEngineBridge {
     }
 }
 
-export const o3deBridge = new O3DEScientificEngineBridge();
+export const physicsSimEngine = new PhysicsSimEngine();
