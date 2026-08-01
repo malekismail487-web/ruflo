@@ -13,8 +13,8 @@ This document provides a grounded, line-traceable overview of the core component
 
 ### B. NVIDIA Model Integration Client
 - **Implementation**: [src/core/nemotronClient.ts](file:///C:/Users/loka3/.gemini/antigravity/scratch/ruflo/src/core/nemotronClient.ts#L1-L41)
-- **Behavior**: Instantiates HTTP POST requests to `https://integrate.api.nvidia.com/v1/chat/completions` using authorization header `Bearer process.env.NVIDIA_API_KEY`. Default model parameter is configured to `meta/llama-3.1-70b-instruct` ([src/core/nemotronClient.ts#L6](file:///C:/Users/loka3/.gemini/antigravity/scratch/ruflo/src/core/nemotronClient.ts#L6)).
-- **Verification**: Verified via live HTTP POST request execution returning `HTTP 200 OK` (`id: chatcmpl-b626dec805d07eef`, model `meta/llama-3.1-70b-instruct`).
+- **Behavior**: Instantiates HTTP POST requests to `https://integrate.api.nvidia.com/v1/chat/completions` using authorization header `Bearer process.env.NVIDIA_API_KEY`. Default model parameter is configured to `nvidia/nemotron-3-ultra-550b-a55b` ([src/core/nemotronClient.ts#L6](file:///C:/Users/loka3/.gemini/antigravity/scratch/ruflo/src/core/nemotronClient.ts#L6)).
+- **Verification**: Verified via live HTTP POST request execution returning `HTTP 200 OK` (`id: chatcmpl-f6a90742-627a-4b41-9c29-cdf6c6314eba`, model `nvidia/nemotron-3-ultra-550b-a55b`).
 
 ### C. Psychometric Adaptive Engine ($\text{IRT} + \theta$)
 - **Implementation**: [src/core/psychometricEngine.ts](file:///C:/Users/loka3/.gemini/antigravity/scratch/ruflo/src/core/psychometricEngine.ts#L1-L38)

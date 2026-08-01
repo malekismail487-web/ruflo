@@ -3,7 +3,7 @@ export class NemotronClient {
     private baseUrl: string = "https://integrate.api.nvidia.com/v1";
     private model: string;
 
-    constructor(apiKey?: string, model: string = "meta/llama-3.1-70b-instruct") {
+    constructor(apiKey?: string, model: string = "nvidia/nemotron-3-ultra-550b-a55b") {
         this.apiKey = apiKey || process.env.NVIDIA_API_KEY || "";
         this.model = model;
         if (!this.apiKey) {
