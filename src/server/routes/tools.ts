@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import { PsychometricEngine } from "../../core/psychometricEngine.js";
 import { NemotronClient } from "../../core/nemotronClient.js";
 import { physicsSimEngine, CelestialBody, Vector3D } from "../../core/physicsSimEngine.js";
+import { blenderEngine } from "../../core/blenderEngine.js";
 
 export const toolsRouter = Router();
 
@@ -28,6 +29,21 @@ toolsRouter.post("/execute", async (req: Request, res: Response) => {
         let result: unknown = null;
 
         switch (toolName) {
+            // ----------------------------------------------------------------
+            // 0. Headless Blender 3D Script Rendering Engine
+            // ----------------------------------------------------------------
+            case "blender_render_script": {
+                const script = String(parameters?.script || parameters?.bpyScript || "");
+                const outputFileName = String(parameters?.outputFileName || "red_sphere_blue_cube.png");
+
+                if (!script) {
+                    throw new Error("Parameter 'script' (bpy Python code) is required for blender_render_script.");
+                }
+
+                result = await blenderEngine.executeScriptAndRender(script, outputFileName);
+                break;
+            }
+
             // ----------------------------------------------------------------
             // 1. Scientific Astronomy N-Body Orbital Mechanics Tool
             // ----------------------------------------------------------------
