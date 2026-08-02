@@ -1,0 +1,49 @@
+{
+  "name": "Project Horizon // Orbital Cyber-Refinery Sector 07",
+  "layoutSeed": 98421,
+  "zonesCount": 3,
+  "proceduralNodes": [
+    {
+      "id": "node-cracking-tower-01",
+      "type": "CrackingTower",
+      "pos": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        8,
+        8,
+        30
+      ]
+    },
+    {
+      "id": "node-plasma-conduit-01",
+      "type": "PlasmaLine",
+      "pos": [
+        5,
+        0,
+        10
+      ],
+      "scale": [
+        2,
+        20,
+        2
+      ]
+    },
+    {
+      "id": "node-gantry-hub-01",
+      "type": "DockingGantry",
+      "pos": [
+        -15,
+        20,
+        5
+      ],
+      "scale": [
+        15,
+        10,
+        8
+      ]
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "engine": "ChaosPhysics",
+  "gravity": [
+    0,
+    0,
+    -9.81
+  ],
+  "rigidBodiesCount": 3,
+  "restitution": 0.85,
+  "momentumConservedStrict": true
+}
