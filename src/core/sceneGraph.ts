@@ -38,15 +38,31 @@ export interface PBRMaterial {
     useNanite?: boolean;
 }
 
+export interface BoneTransform {
+    boneName: string;
+    parentBoneName: string | null;
+    localTransform: Transform3D;
+}
+
+export interface ControlRigConfig {
+    rigName: string;
+    fkIkSwitching: boolean;
+    bonesCount: number;
+    ikSolvers: string[];
+}
+
 export interface MeshGeometry {
     id: string;
-    primitiveType?: 'box' | 'cylinder' | 'sphere' | 'torus' | 'plane' | 'custom';
+    primitiveType?: 'box' | 'cylinder' | 'sphere' | 'torus' | 'plane' | 'skeletal_character' | 'custom';
     assetPath?: string; // glTF / FBX / OBJ path if custom
     dimensions?: Vector3D;
     subdivisions?: number;
     enableNanite?: boolean;
     generateCollision?: boolean;
+    skeletalBones?: BoneTransform[];
+    controlRig?: ControlRigConfig;
 }
+
 
 export interface VolumetricFogConfig {
     enabled: boolean;

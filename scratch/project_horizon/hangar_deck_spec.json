@@ -1,0 +1,29 @@
+{
+  "name": "SM_Hangar_Observation_Deck_AAA",
+  "meshType": "NaniteStaticMesh",
+  "polygons": 450000,
+  "naniteGeometryPrecision": -9,
+  "lumenGIEnabled": true,
+  "raytracedReflections": true,
+  "materials": [
+    {
+      "name": "M_Metallic_Floor_Grate_PBR",
+      "metallic": 0.92,
+      "roughness": 0.25
+    },
+    {
+      "name": "M_Reinforced_Glass_Window_Frame",
+      "metallic": 0.95,
+      "roughness": 0.15
+    },
+    {
+      "name": "M_Yellow_Emissive_Floor_Indicator",
+      "metallic": 0.1,
+      "emissiveColor": [
+        1,
+        0.75,
+        0
+      ]
+    }
+  ]
+}

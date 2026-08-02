@@ -1,0 +1,100 @@
+{
+  "name": "SK_Biomechanical_Warrior_AAA",
+  "meshType": "SkeletalMesh",
+  "polygons": 185000,
+  "naniteSkeletalEnabled": true,
+  "bonesCount": 16,
+  "bonesHierarchy": [
+    {
+      "boneName": "Root",
+      "parentBone": null
+    },
+    {
+      "boneName": "Pelvis",
+      "parentBone": "Root"
+    },
+    {
+      "boneName": "Spine_01",
+      "parentBone": "Pelvis"
+    },
+    {
+      "boneName": "Chest",
+      "parentBone": "Spine_01"
+    },
+    {
+      "boneName": "Neck",
+      "parentBone": "Chest"
+    },
+    {
+      "boneName": "Head",
+      "parentBone": "Neck"
+    },
+    {
+      "boneName": "Clavicle_L",
+      "parentBone": "Chest"
+    },
+    {
+      "boneName": "UpperArm_L",
+      "parentBone": "Chest"
+    },
+    {
+      "boneName": "LowerArm_L",
+      "parentBone": "Chest"
+    },
+    {
+      "boneName": "Hand_L",
+      "parentBone": "Chest"
+    },
+    {
+      "boneName": "Clavicle_R",
+      "parentBone": "Chest"
+    },
+    {
+      "boneName": "UpperArm_R",
+      "parentBone": "Chest"
+    },
+    {
+      "boneName": "LowerArm_R",
+      "parentBone": "Chest"
+    },
+    {
+      "boneName": "Hand_R",
+      "parentBone": "Chest"
+    },
+    {
+      "boneName": "Armor_Plate_Back_01",
+      "parentBone": "Chest"
+    },
+    {
+      "boneName": "Armor_Plate_Back_02",
+      "parentBone": "Chest"
+    }
+  ],
+  "controlRig": {
+    "rigName": "CR_Biomechanical_Warrior",
+    "fkIkSwitching": true,
+    "ikSolvers": [
+      "TwoBoneIK_Arm_L",
+      "TwoBoneIK_Arm_R",
+      "FullBodyIK_Tendrils"
+    ]
+  },
+  "materials": [
+    {
+      "name": "M_Chrome_Segmented_Armor",
+      "metallic": 0.98,
+      "roughness": 0.12,
+      "clearcoat": 0.85
+    },
+    {
+      "name": "M_Plasma_Energy_Core",
+      "metallic": 0.2,
+      "roughness": 0.05,
+      "emissiveColor": [
+        1,
+        0.6,
+        0.1
+      ]
+    }
+  ]
+}
