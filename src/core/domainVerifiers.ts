@@ -156,6 +156,12 @@ export class DomainVerifiers {
             flags
         };
     }
+
+    verifyUnrealEngineResult(executionResult: any) {
+        const { unrealDomainVerifier } = require("./unrealDomainVerifier.js");
+        return unrealDomainVerifier.verifyUnrealExecution(executionResult);
+    }
 }
 
 export const domainVerifiers = new DomainVerifiers();
+
