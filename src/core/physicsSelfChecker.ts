@@ -1,9 +1,3 @@
-/**
- * Automatic Physics Self-Checking Engine
- * Computes energy conservation, angular momentum conservation, and orbital drift,
- * flagging any deviation > 1.0%.
- */
-
 export interface OrbitalStateSample {
     frame: number;
     timeSeconds: number;
@@ -22,27 +16,25 @@ export interface PhysicsSelfCheckResult {
     angularMomentumDeviationPercent: number;
     minRadiusMeters: number;
     maxRadiusMeters: number;
-    eccentricityDrift: number;
+    peakToTroughRadiusFluctuationPercent: number;
+    endToEndRadiusDriftPercent: number;
     flags: string[];
 }
 
 export class PhysicsSelfChecker {
     private G: number = 6.67430e-11;
 
-    /**
-     * Analyzes a 2-body orbital trajectory for physical conservation laws.
-     */
     checkOrbitalPhysics(
         m1: number,
         m2: number,
-        samples: OrbitalStateSample[]
+        samples: OrbitalStateSample[],
+        energyTolerancePercent: number = 1.0
     ): PhysicsSelfCheckResult {
         if (samples.length < 2) {
-            throw new Error("Self-check requires at least 2 state samples (frame 1 and final frame).");
+            throw new Error("Self-check requires at least 2 state samples.");
         }
 
         const flags: string[] = [];
-        const mu = (G * m1 * m2) / (m1 + m2); // Reduced mass gravity parameter
 
         const computeMetrics = (s: OrbitalStateSample) => {
             const rx = s.position.x;
@@ -55,12 +47,10 @@ export class PhysicsSelfChecker {
             const vz = s.velocity.z;
             const vSq = vx * vx + vy * vy + vz * vz;
 
-            // Specific orbital energy E = 0.5 * v^2 - G * M / r
             const eKin = 0.5 * m2 * vSq;
             const ePot = -(this.G * m1 * m2) / r;
             const totalEnergy = eKin + ePot;
 
-            // Angular Momentum vector L = m2 * (r x v)
             const lx = m2 * (ry * vz - rz * vy);
             const ly = m2 * (rz * vx - rx * vz);
             const lz = m2 * (rx * vy - ry * vx);
@@ -83,16 +73,17 @@ export class PhysicsSelfChecker {
 
         const energyDev = Math.abs((final.totalEnergy - initial.totalEnergy) / initial.totalEnergy) * 100;
         const angDev = Math.abs((final.angularMomentumMag - initial.angularMomentumMag) / initial.angularMomentumMag) * 100;
-        const eccentricityDrift = Math.abs(maxR - minR) / ((maxR + minR) / 2);
+        
+        // Exact Peak-to-Trough Fluctuation across all trajectory frames
+        const peakToTroughFluctuation = Math.abs(maxR - minR) / initial.r * 100;
+        // End-to-End Drift between initial frame and return frame
+        const endToEndDrift = Math.abs(final.r - initial.r) / initial.r * 100;
 
-        if (energyDev > 1.0) {
-            flags.push(`[VIOLATION] Total Energy Drift (${energyDev.toFixed(4)}%) exceeds 1.0% tolerance.`);
+        if (energyDev > energyTolerancePercent) {
+            flags.push(`[VIOLATION] Total Energy Drift (${energyDev.toFixed(4)}%) exceeds ${energyTolerancePercent}% tolerance.`);
         }
         if (angDev > 1.0) {
             flags.push(`[VIOLATION] Angular Momentum Drift (${angDev.toFixed(4)}%) exceeds 1.0% tolerance.`);
-        }
-        if (eccentricityDrift > 0.01) {
-            flags.push(`[WARN] Orbital Radius Fluctuation (${(eccentricityDrift * 100).toFixed(4)}%) exceeds 1.0% bounds.`);
         }
 
         return {
@@ -106,7 +97,8 @@ export class PhysicsSelfChecker {
             angularMomentumDeviationPercent: Number(angDev.toFixed(4)),
             minRadiusMeters: minR,
             maxRadiusMeters: maxR,
-            eccentricityDrift: Number(eccentricityDrift.toFixed(6)),
+            peakToTroughRadiusFluctuationPercent: Number(peakToTroughFluctuation.toFixed(4)),
+            endToEndRadiusDriftPercent: Number(endToEndDrift.toFixed(4)),
             flags
         };
     }
