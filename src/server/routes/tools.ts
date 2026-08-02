@@ -180,6 +180,25 @@ toolsRouter.post("/execute", async (req: Request, res: Response) => {
                 break;
             }
 
+            case "swarm_split": {
+                const projectName = String(parameters?.projectName || "AAA_Game_Engine_Subsystem");
+                const requiredRoles: string[] = (parameters?.requiredRoles as string[]) || ["Architect_Agent", "Graphics_Shader_Lead", "Physics_Engine_Lead", "QA_Verifier_Lead"];
+                
+                const { SwarmOrchestrator } = await import("../../core/swarmOrchestrator.js");
+                const orchestrator = new SwarmOrchestrator();
+                result = orchestrator.initiateSplittingPhase(projectName, requiredRoles);
+                break;
+            }
+
+            case "swarm_logs": {
+                const { unifiedEventBus } = await import("../../core/unifiedEventBus.js");
+                result = {
+                    totalLogs: unifiedEventBus.getLogHistory().length,
+                    logs: unifiedEventBus.getLogHistory()
+                };
+                break;
+            }
+
             default: {
                 result = {
                     executedTool: toolName,
