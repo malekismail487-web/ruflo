@@ -121,15 +121,9 @@ toolsRouter.post("/execute", async (req: Request, res: Response) => {
                 const prompt = String(parameters?.prompt || "");
                 const difficulty = Number(parameters?.difficulty || 1.0);
                 const success = Number(parameters?.success ?? 1);
+                const discrimination = Number(parameters?.discrimination || 1.2);
                 
-                const complexityScore = psychometricEngine.evaluatePromptComplexity(prompt);
-                const updatedTheta = psychometricEngine.updateTheta(difficulty, success);
-                
-                result = {
-                    promptComplexity: complexityScore,
-                    updatedTheta,
-                    previousTheta: psychometricEngine.getTheta()
-                };
+                result = await psychometricEngine.evaluatePsychometricProfile(prompt, difficulty, success, discrimination);
                 break;
             }
 
