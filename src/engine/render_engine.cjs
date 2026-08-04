@@ -1,16 +1,16 @@
 /**
- * Track A Render Engine: 3D Mesh PBR Rasterizer with Supersample Anti-Aliasing (SSAA)
+ * Track A Render Engine: 3D Mesh PBR Rasterizer with Gamma-Corrected SSAA
  * 
- * 1. Projects actual 3D procedural engine mesh triangles (Block, Crankshaft, Pistons, Conrods).
+ * 1. Projects full 3D procedural engine assembly (Block Shell, Cylinders, Pistons, Connecting Rods, Crankshaft).
  * 2. Z-Buffer depth testing for occlusion handling.
- * 3. Barycentric normal interpolation & Cook-Torrance GGX Microfacet Shading (GGX NDF + Schlick Fresnel + Smith Visibility).
- * 4. 4x Supersample Anti-Aliasing (SSAA) for smooth AAA-quality edges.
+ * 3. Barycentric normal interpolation & Cook-Torrance GGX Microfacet Specular Shading.
+ * 4. Gamma-Corrected 4x SSAA (512x512 with 2x subpixel resolution) for silky smooth AAA-quality anti-aliased edges.
  */
 
 const fs = require('fs');
 
 class PBRShader {
-  constructor(roughness = 0.25, metallic = 0.85, albedo = [0.8, 0.85, 0.92]) {
+  constructor(roughness = 0.22, metallic = 0.88, albedo = [0.85, 0.88, 0.94]) {
     this.alpha = Math.max(0.01, roughness * roughness);
     this.metallic = metallic;
     this.albedo = albedo;
@@ -53,7 +53,7 @@ class PBRShader {
     const NdotH = Math.max(0.0, N[0]*H[0] + N[1]*H[1] + N[2]*H[2]);
     const VdotH = Math.max(0.0, V[0]*H[0] + V[1]*H[1] + V[2]*H[2]);
 
-    if (NdotL <= 0.0) return [0.03, 0.04, 0.06]; // Ambient shadow tint
+    if (NdotL <= 0.0) return [0.04, 0.05, 0.08]; // Studio ambient fill
 
     const F0 = [
       0.04 * (1 - this.metallic) + this.albedo[0] * this.metallic,
@@ -79,7 +79,7 @@ class PBRShader {
       (kD[2] * this.albedo[2]) / Math.PI
     ];
 
-    const lightIntensity = 3.5;
+    const lightIntensity = 3.6;
     return [
       Math.min(1.0, (diff[0] + spec[0]) * NdotL * lightIntensity + 0.05),
       Math.min(1.0, (diff[1] + spec[1]) * NdotL * lightIntensity + 0.06),
@@ -90,41 +90,39 @@ class PBRShader {
 
 class SoftwareRenderer {
   /**
-   * Renders the actual 3D MeshData object with perspective camera, Z-buffering, PBR shading, and 4x SSAA
+   * Renders complete 3D Mesh Assembly with Isometric Camera Framing, Z-buffering, PBR shading, and Gamma-Corrected 4x SSAA
    */
   static renderMeshPBR(mesh, targetWidth = 512, targetHeight = 512, ssaaScale = 2) {
     const width = targetWidth * ssaaScale;
     const height = targetHeight * ssaaScale;
 
-    const shader = new PBRShader(0.25, 0.85, [0.82, 0.85, 0.90]);
+    const shader = new PBRShader(0.22, 0.88, [0.85, 0.88, 0.94]);
     const lightDir = [0.577, 0.707, 0.408];
-    const viewDir = [0.0, 0.3, 0.95];
+    const viewDir = [0.0, 0.4, 0.91];
 
-    // Initialize Z-Buffer and Frame Buffer
     const zBuffer = new Float32Array(width * height).fill(1e9);
     const frameBuffer = new Float32Array(width * height * 3).fill(0);
 
-    // Set background color gradient (Dark Studio Environment)
+    // Studio Background Gradient
     for (let y = 0; y < height; y++) {
-      const grad = 0.05 + 0.08 * (1 - y / height);
+      const grad = 0.04 + 0.09 * (1 - y / height);
       for (let x = 0; x < width; x++) {
         const idx = (y * width + x) * 3;
         frameBuffer[idx] = grad * 0.7;
-        frameBuffer[idx + 1] = grad * 0.8;
-        frameBuffer[idx + 2] = grad * 1.0;
+        frameBuffer[idx + 1] = grad * 0.85;
+        frameBuffer[idx + 2] = grad * 1.1;
       }
     }
 
-    // Camera Perspective Parameters
-    const camDist = 9.5;
-    const fovScale = width * 0.85;
+    // Isometric Camera Framing to fit full assembly
+    const camDist = 13.0;
+    const fovScale = width * 0.95;
 
     function projectVertex(v) {
-      // Rotate camera slightly (pitch down, yaw isometric)
-      const cosY = Math.cos(0.45), sinY = Math.sin(0.45);
-      const cosP = Math.cos(0.35), sinP = Math.sin(0.35);
+      // Rotation: Yaw 0.60 rad (~34 deg), Pitch 0.40 rad (~23 deg)
+      const cosY = Math.cos(0.60), sinY = Math.sin(0.60);
+      const cosP = Math.cos(0.40), sinP = Math.sin(0.40);
 
-      // World to Camera space
       let x1 = v[0] * cosY - v[2] * sinY;
       let z1 = v[0] * sinY + v[2] * cosY;
       let y1 = v[1];
@@ -132,7 +130,6 @@ class SoftwareRenderer {
       let y2 = y1 * cosP - z1 * sinP;
       let z2 = y1 * sinP + z1 * cosP + camDist;
 
-      // Perspective Projection
       const px = (x1 / z2) * fovScale + width / 2;
       const py = (-y2 / z2) * fovScale + height / 2;
 
@@ -153,7 +150,6 @@ class SoftwareRenderer {
       const p2 = projectVertex(v2Raw);
       const p3 = projectVertex(v3Raw);
 
-      // Bounding box of triangle
       const minX = Math.max(0, Math.floor(Math.min(p1[0], p2[0], p3[0])));
       const maxX = Math.min(width - 1, Math.ceil(Math.max(p1[0], p2[0], p3[0])));
       const minY = Math.max(0, Math.floor(Math.min(p1[1], p2[1], p3[1])));
@@ -175,14 +171,12 @@ class SoftwareRenderer {
             if (depth < zBuffer[pIdx]) {
               zBuffer[pIdx] = depth;
 
-              // Interpolate Normal
               const nx = w1 * n1[0] + w2 * n2[0] + w3 * n3[0];
               const ny = w1 * n1[1] + w2 * n2[1] + w3 * n3[1];
               const nz = w1 * n1[2] + w2 * n2[2] + w3 * n3[2];
               const normLen = Math.sqrt(nx*nx + ny*ny + nz*nz) || 1.0;
               const normal = [nx / normLen, ny / normLen, nz / normLen];
 
-              // PBR Shade
               const color = shader.shade(normal, lightDir, viewDir);
 
               const cIdx = pIdx * 3;
@@ -195,9 +189,10 @@ class SoftwareRenderer {
       }
     }
 
-    // Downsample (4x SSAA Box Filter) from (width, height) to (targetWidth, targetHeight)
+    // Downsample with Gamma Correction (sRGB gamma = 2.2) & SSAA Box Filtering
     const downsampledBuffer = Buffer.alloc(targetWidth * targetHeight * 3);
     const boxSize = ssaaScale * ssaaScale;
+    const invGamma = 1.0 / 2.2;
 
     for (let ty = 0; ty < targetHeight; ty++) {
       for (let tx = 0; tx < targetWidth; tx++) {
@@ -215,10 +210,19 @@ class SoftwareRenderer {
           }
         }
 
+        const rLin = rAcc / boxSize;
+        const gLin = gAcc / boxSize;
+        const bLin = bAcc / boxSize;
+
+        // Apply Gamma Correction (sRGB conversion) for smooth anti-aliased edge transitions
+        const rGamma = Math.pow(Math.min(1.0, Math.max(0.0, rLin)), invGamma);
+        const gGamma = Math.pow(Math.min(1.0, Math.max(0.0, gLin)), invGamma);
+        const bGamma = Math.pow(Math.min(1.0, Math.max(0.0, bLin)), invGamma);
+
         const outIdx = (ty * targetWidth + tx) * 3;
-        downsampledBuffer[outIdx] = Math.floor((rAcc / boxSize) * 255);     // R
-        downsampledBuffer[outIdx + 1] = Math.floor((gAcc / boxSize) * 255); // G
-        downsampledBuffer[outIdx + 2] = Math.floor((bAcc / boxSize) * 255); // B
+        downsampledBuffer[outIdx] = Math.floor(rGamma * 255);     // R
+        downsampledBuffer[outIdx + 1] = Math.floor(gGamma * 255); // G
+        downsampledBuffer[outIdx + 2] = Math.floor(bGamma * 255); // B
       }
     }
 
