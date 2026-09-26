@@ -19,6 +19,8 @@
     "test": "vitest run",
     "test:o3de-truth": "tsx --test tests/o3deExecutionTruth.test.ts",
     "test:render-evidence": "tsx --test tests/renderEvidence.test.ts",
+    "game:generate": "tsx src/cli/generateGame.ts",
+    "test:game-project": "tsx --test tests/gameProject.test.ts tests/godotGame.integration.test.ts",
     "test:ui": "vitest --ui"
   },
   "dependencies": {

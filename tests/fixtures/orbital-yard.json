@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "title": "Orbital Yard",
+  "world": { "skyColor": "#253656", "groundColor": "#596a71", "gravity": 9.8 },
+  "player": { "spawn": [0, 2, 4], "speed": 6, "jumpVelocity": 6 },
+  "props": [
+    { "id": "crate_a", "shape": "box", "body": "dynamic", "position": [2, 4, 0], "size": [1, 1, 1], "color": "#c98552", "mass": 2 },
+    { "id": "column", "shape": "cylinder", "body": "static", "position": [-3, 1, -2], "size": [1, 2, 1], "color": "#a7b5cc" }
+  ],
+  "goals": [{ "id": "orb_1", "position": [0, 1, -4] }]
+}
