@@ -74,17 +74,27 @@ export function validateGameSpec(input: unknown): GameSpec {
         const shape = p.shape as GameSpec["props"][number]["shape"];
         const body = p.body as GameSpec["props"][number]["body"];
         const size = vector(p.size, "prop.size", 0.1, 20);
+        const position = vector(p.position, "prop.position", -100, 100);
+        const halfHeight = shape === "sphere" ? size[0] * 0.5 : size[1] * 0.5;
+        if (body === "dynamic" && position[1] < halfHeight + 0.05) {
+            throw new Error("Dynamic props must spawn above the ground collider");
+        }
         const mass = body === "dynamic" ? boundedNumber(p.mass, "prop.mass", 0.1, 1000) : undefined;
         return {
             id: uniqueId(p.id), shape, body,
-            position: vector(p.position, "prop.position", -100, 100), size,
+            position, size,
             color: color(p.color, "prop.color"), ...(mass === undefined ? {} : { mass }),
         };
     });
     const goals = raw.goals.map((item: unknown) => {
         const goal = record(item);
-        return { id: uniqueId(goal.id), position: vector(goal.position, "goal.position", -100, 100) };
+        const position = vector(goal.position, "goal.position", -100, 100);
+        if (position[1] < 0.5) throw new Error("Goals must be above the ground collider");
+        return { id: uniqueId(goal.id), position };
     });
+    if (goals.length === 0) throw new Error("A playable game requires at least one goal");
+    const spawn = vector(player.spawn, "player.spawn", -50, 50);
+    if (spawn[1] < 1) throw new Error("Player must spawn above the ground collider");
     return {
         version: 1,
         title: label(raw.title, "title"),
@@ -94,7 +104,7 @@ export function validateGameSpec(input: unknown): GameSpec {
             gravity: boundedNumber(world.gravity, "world.gravity", 0.1, 40),
         },
         player: {
-            spawn: vector(player.spawn, "player.spawn", -50, 50),
+            spawn,
             speed: boundedNumber(player.speed, "player.speed", 1, 20),
             jumpVelocity: boundedNumber(player.jumpVelocity, "player.jumpVelocity", 1, 20),
         },

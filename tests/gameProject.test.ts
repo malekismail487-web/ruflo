@@ -58,5 +58,8 @@ test("malformed, oversized, executable and physically invalid model output fails
     assert.throws(() => validateGameSpec({ ...sample, world: { ...sample.world, gravity: Number.NaN } }), /finite/u);
     assert.throws(() => validateGameSpec({ ...sample, props: [...sample.props, { ...sample.props[0], id: "crate_a" }] }), /unique/u);
     assert.throws(() => validateGameSpec({ ...sample, props: [{ ...sample.props[0], mass: -3 }] }), /finite/u);
+    assert.throws(() => validateGameSpec({ ...sample, player: { ...sample.player, spawn: [0, -2, 0] } }), /above the ground/u);
+    assert.throws(() => validateGameSpec({ ...sample, props: [{ ...sample.props[0], position: [2, 0, 0] }] }), /above the ground/u);
+    assert.throws(() => validateGameSpec({ ...sample, goals: [] }), /at least one goal/u);
     assert.throws(() => validateGameSpec({ ...sample, props: Array(65).fill(sample.props[0]) }), /at most 64/u);
 });
