@@ -30,4 +30,6 @@ func _probe() -> void:
 		quit(4)
 		return
 	print("RUFLO_GAMEPLAY_VERIFIED moved_m=", movement_metres, " goals_remaining=0")
+	root.remove_child(scene)
+	scene.free()
 	quit(0)

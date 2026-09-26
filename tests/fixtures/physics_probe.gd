@@ -18,6 +18,8 @@ func _probe() -> void:
 	var final_y := body.global_position.y
 	if final_y < initial_y - 1.0 and final_y > 0.4:
 		print("RUFLO_PHYSICS_VERIFIED initial_y=", initial_y, " final_y=", final_y)
+		root.remove_child(scene)
+		scene.free()
 		quit(0)
 	else:
 		push_error("Rigid body did not fall and settle as expected: %.3f -> %.3f" % [initial_y, final_y])

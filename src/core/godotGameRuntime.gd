@@ -24,7 +24,9 @@ func _ready() -> void:
 	_build_ground()
 	_build_player()
 	for prop in spec["props"]:
-		_build_prop(prop)
+		if not _build_prop(prop):
+			get_tree().quit(2)
+			return
 	for goal in spec["goals"]:
 		_build_goal(goal)
 	_build_hud()
@@ -99,7 +101,7 @@ func _build_player() -> void:
 	camera.look_at(player.position + Vector3(0, 1, 0))
 	camera.current = true
 
-func _build_prop(data: Dictionary) -> void:
+func _build_prop(data: Dictionary) -> bool:
 	var body: PhysicsBody3D
 	if data["body"] == "dynamic":
 		var dynamic_body := RigidBody3D.new()
@@ -113,6 +115,7 @@ func _build_prop(data: Dictionary) -> void:
 	var dimensions := _v3(data["size"])
 	var display := MeshInstance3D.new()
 	var collision := CollisionShape3D.new()
+	collision.name = "CollisionShape3D"
 	match data["shape"]:
 		"sphere":
 			var sphere_mesh := SphereMesh.new()
@@ -139,9 +142,66 @@ func _build_prop(data: Dictionary) -> void:
 			var box_shape := BoxShape3D.new()
 			box_shape.size = dimensions
 			collision.shape = box_shape
-	display.material_override = _material(data["color"])
-	body.add_child(display)
+	if data.has("visualAsset"):
+		# The validated catalog copied this exact hash-pinned GLB into the project.
+		# The model never supplies a filesystem path or executable scene script.
+		var resource_path: String = "res://assets/%s.glb" % data["visualAsset"]
+		var imported: Resource = load(resource_path)
+		if not imported is PackedScene:
+			push_error("Visual asset failed to import: " + str(data["visualAsset"]))
+			return false
+		var visual: Node = (imported as PackedScene).instantiate()
+		if not visual is Node3D:
+			push_error("Visual asset root is not 3D: " + str(data["visualAsset"]))
+			return false
+		visual.name = "Visual_" + str(data["visualAsset"])
+		body.add_child(visual)
+		if not _fit_visual_to_collider(visual as Node3D, dimensions, str(data["shape"])):
+			push_error("Visual asset has no usable 3D mesh: " + str(data["visualAsset"]))
+			return false
+	else:
+		display.material_override = _material(data["color"])
+		body.add_child(display)
 	body.add_child(collision)
+	return true
+
+func _fit_visual_to_collider(visual: Node3D, dimensions: Vector3, primitive_shape: String) -> bool:
+	# GLB authoring units and origins vary. Bound the rendered object to the
+	# explicitly specified physics envelope instead of trusting its raw scale.
+	var mesh_nodes: Array[Node] = visual.find_children("*", "MeshInstance3D", true, false)
+	if visual is MeshInstance3D:
+		mesh_nodes.append(visual)
+	var bounds := AABB()
+	var found := false
+	for node in mesh_nodes:
+		var mesh_node := node as MeshInstance3D
+		if mesh_node.mesh == null:
+			continue
+		var local_transform: Transform3D = visual.global_transform.affine_inverse() * mesh_node.global_transform
+		var box: AABB = mesh_node.mesh.get_aabb()
+		for x in [0.0, 1.0]:
+			for y in [0.0, 1.0]:
+				for z in [0.0, 1.0]:
+					var corner: Vector3 = box.position + box.size * Vector3(x, y, z)
+					var point: Vector3 = local_transform * corner
+					if not found:
+						bounds = AABB(point, Vector3.ZERO)
+						found = true
+					else:
+						bounds = bounds.expand(point)
+	if not found or bounds.size.length() < 0.001:
+		return false
+	var envelope := dimensions
+	if primitive_shape == "sphere":
+		envelope = Vector3.ONE * dimensions.x
+	elif primitive_shape == "cylinder":
+		envelope = Vector3(dimensions.x, dimensions.y, dimensions.x)
+	var fit: float = minf(envelope.x / maxf(bounds.size.x, 0.001),
+		minf(envelope.y / maxf(bounds.size.y, 0.001), envelope.z / maxf(bounds.size.z, 0.001)))
+	fit *= 0.9
+	visual.scale = Vector3.ONE * fit
+	visual.position = -bounds.get_center() * fit
+	return true
 
 func _build_goal(data: Dictionary) -> void:
 	var area := Area3D.new()

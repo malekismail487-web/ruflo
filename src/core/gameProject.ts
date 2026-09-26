@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
+import { GameAssetCatalog, readVerifiedGameAsset, validateGameAssetCatalog } from "./gameAssets.js";
 
 export interface GameSpec {
     version: 1;
@@ -16,6 +17,7 @@ export interface GameSpec {
         size: [number, number, number];
         color: string;
         mass?: number;
+        visualAsset?: string;
     }>;
     goals: Array<{ id: string; position: [number, number, number] }>;
 }
@@ -80,10 +82,14 @@ export function validateGameSpec(input: unknown): GameSpec {
             throw new Error("Dynamic props must spawn above the ground collider");
         }
         const mass = body === "dynamic" ? boundedNumber(p.mass, "prop.mass", 0.1, 1000) : undefined;
+        if (p.visualAsset !== undefined && (typeof p.visualAsset !== "string" || !/^[a-zA-Z][a-zA-Z0-9_-]{0,39}$/u.test(p.visualAsset))) {
+            throw new Error("visualAsset must be a safe catalog ID");
+        }
         return {
             id: uniqueId(p.id), shape, body,
             position, size,
             color: color(p.color, "prop.color"), ...(mass === undefined ? {} : { mass }),
+            ...(p.visualAsset === undefined ? {} : { visualAsset: p.visualAsset }),
         };
     });
     const goals = raw.goals.map((item: unknown) => {
@@ -122,15 +128,25 @@ export function parseModelGameSpec(output: string): GameSpec {
 
 export interface GameDesignModel { generate(prompt: string, maxTokens: number): Promise<string> }
 
-export async function designGame(prompt: string, model: GameDesignModel): Promise<GameSpec> {
+export async function designGame(prompt: string, model: GameDesignModel, catalog?: GameAssetCatalog): Promise<GameSpec> {
     if (prompt.length < 8 || prompt.length > 4000) throw new Error("Prompt must contain 8-4000 characters");
-    const instruction = `Design a small playable 3D game prototype from the following request. Return ONLY JSON, no code or Markdown. Schema: {"version":1,"title":"short plain text","world":{"skyColor":"#RRGGBB","groundColor":"#RRGGBB","gravity":9.8},"player":{"spawn":[0,2,0],"speed":6,"jumpVelocity":6},"props":[{"id":"crate1","shape":"box|sphere|cylinder","body":"static|dynamic","position":[0,2,0],"size":[1,1,1],"color":"#RRGGBB","mass":2}],"goals":[{"id":"goal1","position":[2,1,0]}]}. Limits: 64 props, 16 goals, world coordinates -100..100, dimensions 0.1..20. Keep the player above ground. Use distinct ids. Do not claim photorealistic assets or scientific validity. User request:\n${prompt}`;
+    const availableAssets = catalog ? validateGameAssetCatalog(catalog).assets.map(asset => asset.id) : [];
+    const instruction = `Design a small playable 3D game prototype from the following request. Return ONLY JSON, no code or Markdown. Schema: {"version":1,"title":"short plain text","world":{"skyColor":"#RRGGBB","groundColor":"#RRGGBB","gravity":9.8},"player":{"spawn":[0,2,0],"speed":6,"jumpVelocity":6},"props":[{"id":"crate1","shape":"box|sphere|cylinder","body":"static|dynamic","position":[0,2,0],"size":[1,1,1],"color":"#RRGGBB","mass":2,"visualAsset":"optional-catalog-id"}],"goals":[{"id":"goal1","position":[2,1,0]}]}. Limits: 64 props, 16 goals, world coordinates -100..100, dimensions 0.1..20. Keep the player above ground. Use distinct ids. Available visualAsset IDs: ${JSON.stringify(availableAssets)}. Omit visualAsset if no suitable ID exists. Asset IDs never grant file access. Do not claim photorealistic assets or scientific validity. User request:\n${prompt}`;
     return parseModelGameSpec(await model.generate(instruction, 4096));
 }
 
 /** Creates a new Godot project atomically; never overwrites an existing output. */
-export function compileGameProject(specInput: unknown, outputDirectory: string): string {
+export function compileGameProject(specInput: unknown, outputDirectory: string, catalogInput?: unknown): string {
     const spec = validateGameSpec(specInput);
+    const catalog = catalogInput === undefined ? { version: 1 as const, assets: [] } : validateGameAssetCatalog(catalogInput);
+    const selected = new Map<string, ReturnType<typeof readVerifiedGameAsset> & { id: string; sha256: string; source: string; license: string }>();
+    for (const prop of spec.props) {
+        if (!prop.visualAsset || selected.has(prop.visualAsset)) continue;
+        const asset = catalog.assets.find(item => item.id === prop.visualAsset);
+        if (!asset) throw new Error(`Unregistered visual asset: ${prop.visualAsset}`);
+        selected.set(asset.id, { id: asset.id, sha256: asset.sha256, source: asset.source,
+            license: asset.license, ...readVerifiedGameAsset(asset) });
+    }
     const output = path.resolve(outputDirectory);
     const parent = path.dirname(output);
     if (!fs.existsSync(parent) || !fs.statSync(parent).isDirectory()) throw new Error("Output parent directory does not exist");
@@ -140,6 +156,12 @@ export function compileGameProject(specInput: unknown, outputDirectory: string):
     try {
         const template = fileURLToPath(new URL("./godotGameRuntime.gd", import.meta.url));
         fs.copyFileSync(template, path.join(stage, "Main.gd"));
+        if (selected.size > 0) {
+            const assetDirectory = path.join(stage, "assets");
+            fs.mkdirSync(assetDirectory);
+            for (const asset of selected.values()) fs.writeFileSync(path.join(assetDirectory, `${asset.id}.glb`), asset.data);
+        }
+        fs.writeFileSync(path.join(stage, "asset-manifest.json"), JSON.stringify({ version: 1, assets: [...selected.values()].map(({ data: _data, ...asset }) => asset) }, null, 2) + "\n");
         fs.writeFileSync(path.join(stage, "world.json"), JSON.stringify(spec, null, 2) + "\n");
         fs.writeFileSync(path.join(stage, "Main.tscn"), '[gd_scene load_steps=2 format=3]\n\n[ext_resource type="Script" path="res://Main.gd" id="1"]\n\n[node name="Main" type="Node3D"]\nscript = ExtResource("1")\n');
         fs.writeFileSync(path.join(stage, "project.godot"), `config_version=5\n\n[application]\nconfig/name=${JSON.stringify(spec.title)}\nrun/main_scene="res://Main.tscn"\n\n[physics]\n3d/default_gravity=${spec.world.gravity}\n\n[rendering]\nrenderer/rendering_method="gl_compatibility"\n`);
