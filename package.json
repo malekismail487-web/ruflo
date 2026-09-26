@@ -17,6 +17,8 @@
     "docker:down": "docker-compose down",
     "build": "tsc",
     "test": "vitest run",
+    "test:o3de-truth": "tsx --test tests/o3deExecutionTruth.test.ts",
+    "test:render-evidence": "tsx --test tests/renderEvidence.test.ts",
     "test:ui": "vitest --ui"
   },
   "dependencies": {

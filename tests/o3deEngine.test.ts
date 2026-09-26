@@ -5,7 +5,7 @@ import { o3deEngineBackend } from "../src/core/o3deEngine.js";
 
 describe("Open 3D Engine (O3DE) Built-In 3D Engine Integration", () => {
     it("should generate valid O3DE AzCore Python automation script from SceneGraph", () => {
-        const scene = new SceneGraph("TestO3DEScene");
+        const scene = new SceneGraph("test-scene", "TestO3DEScene");
         scene.addNode({
             id: "hero_mech",
             name: "HeroMechMesh",
@@ -14,10 +14,8 @@ describe("Open 3D Engine (O3DE) Built-In 3D Engine Integration", () => {
                 rotation: { x: 0, y: 45, z: 0 },
                 scale: { x: 1, y: 1, z: 1 }
             },
-            mesh: {
-                primitiveType: "cube",
-                materialName: "Substrate_Nanite_Titanium"
-            }
+            mesh: { id: "mech-mesh", primitiveType: "box" },
+            childrenIds: []
         });
 
         scene.addNode({
@@ -31,8 +29,10 @@ describe("Open 3D Engine (O3DE) Built-In 3D Engine Integration", () => {
             light: {
                 type: "directional",
                 intensity: 10000,
-                color: { r: 1, g: 0.95, b: 0.9 }
-            }
+                color: { r: 1, g: 0.95, b: 0.9 },
+                castShadows: true
+            },
+            childrenIds: []
         });
 
         const adapter = new O3DEAdapter();
@@ -47,14 +47,16 @@ describe("Open 3D Engine (O3DE) Built-In 3D Engine Integration", () => {
         expect(result.metadata.hasAtomRenderer).toBe(true);
     });
 
-    it("should assemble O3DE project manifest and execute scene graph", async () => {
-        const scene = new SceneGraph("SwarmMissionLevel");
+    it("should prepare a script without misreporting an unrun Editor as a render", async () => {
+        const scene = new SceneGraph("mission", "SwarmMissionLevel");
         const execResult = await o3deEngineBackend.executeSceneGraph(scene, "mission_render.png");
 
-        expect(execResult.success).toBe(true);
+        expect(execResult.success).toBe(false);
+        expect(execResult.status).toBe("SCRIPT_PREPARED");
         expect(execResult.engineUsed).toBe("o3de");
-        expect(execResult.stats.atomRenderPipelineEnabled).toBe(true);
-        expect(execResult.stats.physXEnabled).toBe(true);
-        expect(execResult.stats.terrainMeshEnabled).toBe(true);
+        expect(execResult.outputImagePath).toBeUndefined();
+        expect(execResult.stats.atomRenderPipelineEnabled).toBe(false);
+        expect(execResult.stats.physXEnabled).toBe(false);
+        expect(execResult.stats.terrainMeshEnabled).toBe(false);
     });
 });

@@ -5,14 +5,16 @@
  * scene construction, script generation, and Movie Render Queue execution with transparent fallback.
  */
 
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { SceneGraph } from "./sceneGraph.js";
 import { UnrealAdapter, BlenderAdapter, RenderAdapterResult } from "./rendererAdapter.js";
 import { unrealDetector, UnrealDetectionResult } from "./unrealDetector.js";
 import { assetPipeline } from "./assetPipeline.js";
 import { blenderEngine } from "./blenderEngine.js";
+import { inspectPngEvidence } from "./renderEvidence.js";
 
 export interface EngineExecutionResult {
     success: boolean;
@@ -68,11 +70,11 @@ export class UnrealEngineBackend {
         sceneGraph: SceneGraph,
         outputFileName: string = "unreal_render.png"
     ): Promise<EngineExecutionResult> {
-        const detection = unrealDetector.detectEnvironment();
-        const scratchDir = path.resolve(process.cwd(), "scratch");
-        if (!fs.existsSync(scratchDir)) {
-            fs.mkdirSync(scratchDir, { recursive: true });
+        if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,119}\.png$/u.test(outputFileName)) {
+            throw new Error("outputFileName must be a simple PNG filename");
         }
+        const detection = unrealDetector.detectEnvironment();
+        const scratchDir = fs.mkdtempSync(path.join(os.tmpdir(), "ruflo-unreal-"));
 
         const projectDir = path.join(scratchDir, "UnrealSwarmProject");
         const uprojectPath = this.createProjectManifest(projectDir);
@@ -106,30 +108,30 @@ export class UnrealEngineBackend {
         const scriptPath = path.join(projectDir, "temp_unreal_scene.py");
         fs.writeFileSync(scriptPath, unrealAdapterResult.scriptPayload, "utf-8");
 
-        const command = `"${detection.editorCmdPath}" "${uprojectPath}" -ExecutePythonScript="${scriptPath}" -unattended -NullRHI -nosplash`;
-
         try {
-            const stdoutBuffer = execSync(command, { encoding: "utf-8", timeout: 120000 });
-            const mockOutputPath = path.join(scratchDir, outputFileName);
-            
-            // Create evidence marker if renderer completes
-            fs.writeFileSync(mockOutputPath, "UNREAL_ENGINE_RENDER_EVIDENCE_OK", "utf-8");
+            const startedAtMs = Date.now();
+            const stdoutBuffer = execFileSync(detection.editorCmdPath!, [
+                uprojectPath, `-ExecutePythonScript=${scriptPath}`, "-unattended", "-nosplash",
+            ], { encoding: "utf-8", timeout: 120000, shell: false });
+            const outputPath = path.join(scratchDir, outputFileName);
+            const evidence = inspectPngEvidence(outputPath, startedAtMs);
 
             return {
-                success: true,
+                success: evidence.valid,
                 engineUsed: 'unreal',
                 scriptPayload: unrealAdapterResult.scriptPayload,
-                outputImagePath: mockOutputPath,
+                outputImagePath: evidence.valid ? outputPath : undefined,
                 projectPath: uprojectPath,
                 stdout: stdoutBuffer,
                 stderr: "",
                 detectionInfo: detection,
                 stats: {
                     nodesProcessed: unrealAdapterResult.metadata.totalNodesProcessed,
-                    volumetricFogEnabled: unrealAdapterResult.metadata.hasVolumetricFog,
-                    lumenGIEnabled: unrealAdapterResult.metadata.hasLumenGI,
-                    naniteMeshesEnabled: unrealAdapterResult.metadata.hasNaniteMeshes
-                }
+                    volumetricFogEnabled: false,
+                    lumenGIEnabled: false,
+                    naniteMeshesEnabled: false
+                },
+                error: evidence.valid ? undefined : `Unreal did not produce a verified PNG: ${evidence.reason}`
             };
         } catch (err: unknown) {
             const execErr = err as { stdout?: string; stderr?: string; message?: string };
@@ -143,9 +145,9 @@ export class UnrealEngineBackend {
                 detectionInfo: detection,
                 stats: {
                     nodesProcessed: unrealAdapterResult.metadata.totalNodesProcessed,
-                    volumetricFogEnabled: unrealAdapterResult.metadata.hasVolumetricFog,
-                    lumenGIEnabled: unrealAdapterResult.metadata.hasLumenGI,
-                    naniteMeshesEnabled: unrealAdapterResult.metadata.hasNaniteMeshes
+                    volumetricFogEnabled: false,
+                    lumenGIEnabled: false,
+                    naniteMeshesEnabled: false
                 },
                 error: execErr.message || String(err)
             };

@@ -35,6 +35,14 @@ export class O3DEAdapter implements RendererAdapter {
     }
 
     convertSceneGraph(sceneGraph: SceneGraph, outputFileName: string = "o3de_frame.png"): RenderAdapterResult {
+        const validName = (value: unknown) => typeof value === 'string' && value.length > 0 && value.length <= 160;
+        const validVector = (vector: unknown) => {
+            if (!vector || typeof vector !== 'object') return false;
+            const value = vector as { x?: unknown; y?: unknown; z?: unknown };
+            return [value.x, value.y, value.z].every(axis => typeof axis === 'number'
+                && Number.isFinite(axis) && Math.abs(axis) <= 1_000_000);
+        };
+        if (!validName(sceneGraph.name)) throw new Error("Invalid O3DE scene name");
         const stats = sceneGraph.getStats();
         const env = sceneGraph.environment;
         const fog = env.volumetricFog;
@@ -50,7 +58,7 @@ import azlmbr.math as math
 import azlmbr.atom as atom
 import azlmbr.editor as editor
 
-print("[O3DEAdapter] Initializing scene level '${sceneGraph.name}' in O3DE Atom Renderer...")
+print("[O3DEAdapter] Initializing scene level", ${JSON.stringify(sceneGraph.name)})
 
 # 1. Environment & Global Lighting
 print("[O3DEAdapter] Configuring Atom Global Illumination and Volumetric Fog (Enabled: ${fog.enabled})")
@@ -60,15 +68,18 @@ entities = []
 `;
 
         for (const node of sceneGraph.nodes.values()) {
+            if (!validName(node.name) || !node.transform || !validVector(node.transform.position)
+                || !validVector(node.transform.rotation) || !validVector(node.transform.scale)) {
+                throw new Error("Invalid O3DE scene node");
+            }
             const pos = node.transform.position;
             const rot = node.transform.rotation;
             const sca = node.transform.scale;
 
             pyScript += `
-# Node: ${node.name}
 entity_id = editor.ToolsApplicationRequestBus(bus.Broadcast, 'CreateNewEntity', None)
 if entity_id:
-    editor.EditorEntityAPIBus(bus.Event, 'SetName', entity_id, "${node.name}")
+    editor.EditorEntityAPIBus(bus.Event, 'SetName', entity_id, ${JSON.stringify(node.name)})
     editor.EditorComponentAPIBus(bus.Event, 'AddComponentsOfType', entity_id, ["{82F2F2D1-F4E5-46D9-BBE8-4D05B7EF7A89}"]) # TransformComponent
     
     pos_vec = math.Vector3(${pos.x}, ${pos.y}, ${pos.z})

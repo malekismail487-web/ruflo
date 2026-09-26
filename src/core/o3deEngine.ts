@@ -4,16 +4,18 @@
  * Supports AzCore entity management, Atom RHI rendering, Python scripting, and project automation.
  */
 
-import { execSync } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { SceneGraph } from "./sceneGraph.js";
-import { O3DEAdapter, RenderAdapterResult } from "./rendererAdapter.js";
+import { O3DEAdapter } from "./rendererAdapter.js";
 
 export interface O3DEExecutionResult {
     success: boolean;
+    status: 'SCRIPT_PREPARED' | 'RENDER_VERIFIED';
     engineUsed: 'o3de';
     scriptPayload: string;
+    scriptPath?: string;
     outputImagePath?: string;
     projectPath?: string;
     stdout: string;
@@ -29,16 +31,11 @@ export interface O3DEExecutionResult {
 
 export class O3DEEngineBackend {
     private o3deAdapter: O3DEAdapter = new O3DEAdapter();
-    private engineRoot: string;
-
-    constructor(customEngineRoot?: string) {
-        this.engineRoot = customEngineRoot || path.resolve(process.cwd());
-    }
 
     /**
      * Prepares an authentic O3DE project manifest (project.json)
      */
-    createProjectManifest(projectDir: string, projectName: string = "RufloSwarmO3DEProject"): string {
+    private createProjectManifest(projectDir: string, projectName: string = "RufloSwarmO3DEProject"): string {
         if (!fs.existsSync(projectDir)) {
             fs.mkdirSync(projectDir, { recursive: true });
         }
@@ -69,68 +66,43 @@ export class O3DEEngineBackend {
     }
 
     /**
-     * Executes scene graph conversion and renders using O3DE Editor Python scripting
+     * Prepare a script for an O3DE Editor with Python Editor Bindings enabled.
+     * This repository does not yet launch that Editor or verify a rendered frame.
+     * A generated script, project manifest, and successful registration check are
+     * never equivalent to actual scene execution or image evidence.
      */
     async executeSceneGraph(
         sceneGraph: SceneGraph,
         outputFileName: string = "o3de_render.png"
     ): Promise<O3DEExecutionResult> {
-        const scratchDir = path.resolve(process.cwd(), "scratch");
-        if (!fs.existsSync(scratchDir)) {
-            fs.mkdirSync(scratchDir, { recursive: true });
+        if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,119}\.png$/u.test(outputFileName)) {
+            throw new Error("outputFileName must be a simple PNG filename");
         }
-
+        const o3deResult = this.o3deAdapter.convertSceneGraph(sceneGraph, outputFileName);
+        const scratchDir = fs.mkdtempSync(path.join(os.tmpdir(), "ruflo-o3de-"));
         const projectDir = path.join(scratchDir, "O3DESwarmProject");
         const projectJsonPath = this.createProjectManifest(projectDir);
 
-        const o3deResult = this.o3deAdapter.convertSceneGraph(sceneGraph, outputFileName);
         const scriptPath = path.join(projectDir, "temp_o3de_scene.py");
         fs.writeFileSync(scriptPath, o3deResult.scriptPayload, "utf-8");
 
-        const o3deCli = path.join(this.engineRoot, "scripts", process.platform === "win32" ? "o3de.bat" : "o3de.sh");
-        const outputPath = path.join(scratchDir, outputFileName);
-
-        let command = `python "${path.join(this.engineRoot, 'scripts', 'o3de.py')}" print-registration`;
-
-        try {
-            let stdout = "";
-            if (fs.existsSync(path.join(this.engineRoot, "scripts", "o3de.py"))) {
-                stdout = execSync(command, { encoding: "utf-8", timeout: 30000 });
-            }
-
-            return {
-                success: true,
-                engineUsed: 'o3de',
-                scriptPayload: o3deResult.scriptPayload,
-                outputImagePath: outputPath,
-                projectPath: projectJsonPath,
-                stdout: stdout + `\n[O3DEEngineBackend] Scene assembled and dispatched to O3DE Atom Renderer Pipeline.`,
-                stderr: "",
-                stats: {
-                    nodesProcessed: o3deResult.metadata.totalNodesProcessed,
-                    atomRenderPipelineEnabled: true,
-                    physXEnabled: true,
-                    terrainMeshEnabled: true
-                }
-            };
-        } catch (err: unknown) {
-            const execErr = err as { stdout?: string; stderr?: string; message?: string };
-            return {
-                success: true, // Graceful pipeline assembly success
-                engineUsed: 'o3de',
-                scriptPayload: o3deResult.scriptPayload,
-                projectPath: projectJsonPath,
-                stdout: execErr.stdout || "[O3DEEngineBackend] O3DE Python script generated successfully.",
-                stderr: execErr.stderr || "",
-                stats: {
-                    nodesProcessed: o3deResult.metadata.totalNodesProcessed,
-                    atomRenderPipelineEnabled: true,
-                    physXEnabled: true,
-                    terrainMeshEnabled: true
-                },
-                error: execErr.message
-            };
-        }
+        return {
+            success: false,
+            status: 'SCRIPT_PREPARED',
+            engineUsed: 'o3de',
+            scriptPayload: o3deResult.scriptPayload,
+            scriptPath,
+            projectPath: projectJsonPath,
+            stdout: "",
+            stderr: "",
+            stats: {
+                nodesProcessed: o3deResult.metadata.totalNodesProcessed,
+                atomRenderPipelineEnabled: false,
+                physXEnabled: false,
+                terrainMeshEnabled: false
+            },
+            error: "O3DE Editor execution and render verification have not occurred."
+        };
     }
 }
 

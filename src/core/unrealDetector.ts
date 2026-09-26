@@ -7,7 +7,6 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { execSync } from "node:child_process";
 
 export interface UnrealPluginStatus {
     name: string;
@@ -58,11 +57,11 @@ export class UnrealDetector {
         }
 
         const requiredPlugins: UnrealPluginStatus[] = [
-            { name: "MovieRenderPipeline", required: true, available: true },
-            { name: "PythonScriptPlugin", required: true, available: true },
-            { name: "EditorScriptingUtilities", required: true, available: true },
-            { name: "VolumetricCloud", required: false, available: true },
-            { name: "Landmass", required: false, available: true }
+            { name: "MovieRenderPipeline", required: true, available: false },
+            { name: "PythonScriptPlugin", required: true, available: false },
+            { name: "EditorScriptingUtilities", required: true, available: false },
+            { name: "VolumetricCloud", required: false, available: false },
+            { name: "Landmass", required: false, available: false }
         ];
 
         if (!foundPath) {
@@ -83,16 +82,16 @@ export class UnrealDetector {
         const match = foundPath.match(/UE_(5\.\d)/i);
         const versionStr = match ? match[1] : "5.x";
 
-        report.push(`[UnrealDetector] Verified Unreal Engine version ${versionStr}.`);
-        report.push(`[UnrealDetector] All core plugins (MovieRenderPipeline, PythonScriptPlugin, EditorScriptingUtilities) validated.`);
+        report.push(`[UnrealDetector] Found a candidate Unreal Engine binary with path-inferred version ${versionStr}.`);
+        report.push("[UnrealDetector] Required plugins are not verified; native rendering is not yet eligible.");
 
         return {
-            available: true,
+            available: false,
             version: versionStr,
             editorCmdPath: foundPath,
             plugins: requiredPlugins,
-            fallbackRecommended: false,
-            fallbackTarget: 'none',
+            fallbackRecommended: true,
+            fallbackTarget: 'blender',
             diagnosticReport: report
         };
     }
