@@ -4,11 +4,13 @@ import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { GameAssetCatalog, readVerifiedGameAsset, validateGameAssetCatalog } from "./gameAssets.js";
 import { GeometryRecipe, generateGeometry, validateGeometryRecipe } from "./proceduralGeometry.js";
+import { WorldArtSpec, validateWorldArtSpec } from "./worldArt.js";
 
 export interface GameSpec {
     version: 1;
     title: string;
     world: { skyColor: string; groundColor: string; gravity: number };
+    worldArt?: WorldArtSpec;
     player: { spawn: [number, number, number]; speed: number; jumpVelocity: number };
     props: Array<{
         id: string;
@@ -120,6 +122,7 @@ export function validateGameSpec(input: unknown): GameSpec {
             groundColor: color(world.groundColor, "world.groundColor"),
             gravity: boundedNumber(world.gravity, "world.gravity", 0.1, 40),
         },
+        ...(raw.worldArt === undefined ? {} : { worldArt: validateWorldArtSpec(raw.worldArt) }),
         player: {
             spawn,
             speed: boundedNumber(player.speed, "player.speed", 1, 20),
@@ -140,11 +143,25 @@ export function parseModelGameSpec(output: string): GameSpec {
 
 export interface GameDesignModel { generate(prompt: string, maxTokens: number): Promise<string> }
 
-export async function designGame(prompt: string, model: GameDesignModel, catalog?: GameAssetCatalog): Promise<GameSpec> {
+export interface GameDesignRequirements {
+    worldArt?: boolean;
+    originalGeometry?: boolean;
+}
+
+export async function designGame(prompt: string, model: GameDesignModel, catalog?: GameAssetCatalog,
+    requirements: GameDesignRequirements = {}): Promise<GameSpec> {
     if (prompt.length < 8 || prompt.length > 4000) throw new Error("Prompt must contain 8-4000 characters");
     const availableAssets = catalog ? validateGameAssetCatalog(catalog).assets.map(asset => asset.id) : [];
-    const instruction = `Design a small playable 3D game prototype from the following request. Return ONLY JSON, no code or Markdown. Schema: {"version":1,"title":"short plain text","world":{"skyColor":"#RRGGBB","groundColor":"#RRGGBB","gravity":9.8},"player":{"spawn":[0,2,0],"speed":6,"jumpVelocity":6},"props":[{"id":"sculpture","shape":"box|sphere|cylinder","body":"static|dynamic","position":[0,2,0],"size":[2,2,2],"color":"#RRGGBB","mass":2,"visualAsset":"optional-generated-or-catalog-id"}],"generatedGeometry":[{"id":"original_sculpture","resolution":48,"color":"#bdac91","metallic":0.6,"roughness":0.35,"root":{"kind":"subtract","left":{"kind":"sphere","radius":0.8},"right":{"kind":"cylinder","radius":0.25,"halfHeight":0.9}}}],"goals":[{"id":"goal1","position":[2,1,0]}]}. To create original geometry, add up to four generatedGeometry recipes and reference their IDs from props.visualAsset. Geometry is an SDF graph inside normalized coordinates -1..1: sphere(radius), box(halfSize:[x,y,z],roundness), cylinder(radius,halfHeight), torus(majorRadius,minorRadius), union/intersection/subtract/smoothUnion(radius,left,right), translate(offset:[x,y,z],child), rotateY(degrees,child), scale(factor,child), radialArray(count,radius,child). Maximum 48 nodes, depth 12, resolution 20..72; keep all geometry within [-1,1]. Generated geometry is actual mesh generation, not an imported model; use it when the user asks you to create an original asset. Limits: 64 props, 16 goals, world coordinates -100..100, dimensions 0.1..20. Keep the player above ground. Use distinct ids. Approved imported visualAsset IDs, if any: ${JSON.stringify(availableAssets)}. Asset IDs never grant file access. Do not claim photorealism or scientific validity. User request:\n${prompt}`;
-    return parseModelGameSpec(await model.generate(instruction, 8192));
+    const strictWorld = requirements.worldArt === true;
+    const strictGeometry = requirements.originalGeometry === true;
+    const instruction = `Design a playable original 3D game world from the request. Return ONLY JSON, no code or Markdown. Schema: {"version":1,"title":"short plain text","world":{"skyColor":"#RRGGBB","groundColor":"#RRGGBB","gravity":9.8},"player":{"spawn":[0,2,0],"speed":6,"jumpVelocity":6},"props":[{"id":"sculpture","shape":"box|sphere|cylinder","body":"static|dynamic","position":[0,2,0],"size":[2,2,2],"color":"#RRGGBB","mass":2,"visualAsset":"optional-generated-or-catalog-id"}],"generatedGeometry":[{"id":"original_sculpture","resolution":48,"color":"#bdac91","metallic":0.6,"roughness":0.35,"root":{"kind":"subtract","left":{"kind":"sphere","radius":0.8},"right":{"kind":"cylinder","radius":0.25,"halfHeight":0.9}}}],"goals":[{"id":"goal1","position":[2,1,0]}],"worldArt":{"version":1,"seed":1847,"terrain":{"extent":160,"resolution":192,"relief":9,"ridgeStrength":20,"riverWidth":5},"citadel":{"center":[0,-20],"radius":15,"towerHeight":23,"towerCount":8,"palette":"limestone"},"atmosphere":{"timeOfDay":"dusk","fogDensity":0.008},"showcaseCamera":{"position":[0,13,48],"target":[0,11,-20],"fov":60}}}. ${strictWorld ? "REQUIRED: include worldArt with your own parameters for the terrain, architecture, atmosphere, and camera; do not merely copy the example numbers." : "When asked for terrain, monumental architecture, or a cinematic landscape, include worldArt and choose its bounded parameters."} worldArt creates original terrain, structures, river and lighting procedurally; it never loads third-party scenery. ${strictGeometry ? "REQUIRED: author at least one original generatedGeometry SDF recipe, place it as a prop with visualAsset equal to the recipe id, and ensure the geometry is visible in the scene." : "To create an original prop mesh, add up to four generatedGeometry recipes and reference their IDs from props.visualAsset."} Geometry is an SDF graph inside normalized coordinates -1..1: sphere(radius), box(halfSize:[x,y,z],roundness), cylinder(radius,halfHeight), torus(majorRadius,minorRadius), union/intersection/subtract/smoothUnion(radius,left,right), translate(offset:[x,y,z],child), rotateY(degrees,child), scale(factor,child), radialArray(count,radius,child). Maximum 48 nodes, depth 12, resolution 20..72. Limits: 64 props, 16 goals, world coordinates -100..100, dimensions 0.1..20. Keep the player above ground. Use distinct ids. Approved imported visualAsset IDs, if any: ${JSON.stringify(availableAssets)}. Asset IDs never grant file access. Do not claim AAA quality without render review. User request:\n${prompt}`;
+    const spec = parseModelGameSpec(await model.generate(`${instruction}\nFor original geometry, design a bounded SDF recipe rather than referencing an unapproved asset.`, 8192));
+    if (strictWorld && !spec.worldArt) throw new Error("Model omitted required worldArt design");
+    if (strictGeometry && !(spec.generatedGeometry ?? []).some(recipe =>
+        spec.props.some(prop => prop.visualAsset === recipe.id))) {
+        throw new Error("Model omitted a placed original geometry recipe");
+    }
+    return spec;
 }
 
 /** Creates a new Godot project atomically; never overwrites an existing output. */
@@ -164,7 +181,7 @@ export function compileGameProject(specInput: unknown, outputDirectory: string, 
             const generated = generateGeometry(recipe);
             selected.set(recipe.id, { id: recipe.id, data: generated.data, sha256: generated.sha256,
                 recipeSha256: generated.recipeSha256, triangles: generated.triangles, vertices: generated.vertices,
-                meshes: 1, materials: 1, origin: "generated", source: "NYX procedural geometry v1",
+                meshes: 1, materials: 1, origin: "generated", source: "bounded procedural geometry v1",
                 license: "Generated original; downstream rights review required" });
             continue;
         }
@@ -182,6 +199,8 @@ export function compileGameProject(specInput: unknown, outputDirectory: string, 
     try {
         const template = fileURLToPath(new URL("./godotGameRuntime.gd", import.meta.url));
         fs.copyFileSync(template, path.join(stage, "Main.gd"));
+        const worldArtTemplate = fileURLToPath(new URL("./godotWorldArt.gd", import.meta.url));
+        fs.copyFileSync(worldArtTemplate, path.join(stage, "WorldArt.gd"));
         if (selected.size > 0) {
             const assetDirectory = path.join(stage, "assets");
             fs.mkdirSync(assetDirectory);
@@ -190,7 +209,7 @@ export function compileGameProject(specInput: unknown, outputDirectory: string, 
         fs.writeFileSync(path.join(stage, "asset-manifest.json"), JSON.stringify({ version: 1, assets: [...selected.values()].map(({ data: _data, ...asset }) => asset) }, null, 2) + "\n");
         fs.writeFileSync(path.join(stage, "world.json"), JSON.stringify(spec, null, 2) + "\n");
         fs.writeFileSync(path.join(stage, "Main.tscn"), '[gd_scene load_steps=2 format=3]\n\n[ext_resource type="Script" path="res://Main.gd" id="1"]\n\n[node name="Main" type="Node3D"]\nscript = ExtResource("1")\n');
-        fs.writeFileSync(path.join(stage, "project.godot"), `config_version=5\n\n[application]\nconfig/name=${JSON.stringify(spec.title)}\nrun/main_scene="res://Main.tscn"\n\n[physics]\n3d/default_gravity=${spec.world.gravity}\n\n[rendering]\nrenderer/rendering_method="gl_compatibility"\n`);
+        fs.writeFileSync(path.join(stage, "project.godot"), `config_version=5\n\n[application]\nconfig/name=${JSON.stringify(spec.title)}\nrun/main_scene="res://Main.tscn"\n\n[display]\nwindow/size/viewport_width=1280\nwindow/size/viewport_height=720\n\n[physics]\n3d/default_gravity=${spec.world.gravity}\n\n[rendering]\nrenderer/rendering_method="${spec.worldArt ? "forward_plus" : "gl_compatibility"}"\n`);
         fs.renameSync(stage, output);
         return output;
     } catch (error) {

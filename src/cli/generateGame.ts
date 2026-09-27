@@ -1,8 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
+import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { NemotronClient } from "../core/nemotronClient.js";
+import { DEFAULT_NEMOTRON_MODEL, NemotronClient } from "../core/nemotronClient.js";
 import { compileGameProject, designGame, validateGameSpec } from "../core/gameProject.js";
 import { validateGameAssetCatalog } from "../core/gameAssets.js";
 
@@ -34,14 +35,31 @@ async function main(): Promise<void> {
     const prompt = option("--prompt");
     const specFile = option("--spec");
     const assetFile = option("--assets");
+    const nyxWorld = process.argv.includes("--nyx-world");
     if (!output || Boolean(prompt) === Boolean(specFile)) {
-        throw new Error("Usage: generate-game --out NEW_DIRECTORY (--prompt DESCRIPTION | --spec FILE) [--assets OPERATOR_CATALOG_JSON] [--godot GODOT_EXECUTABLE]");
+        throw new Error("Usage: generate-game --out NEW_DIRECTORY (--prompt DESCRIPTION [--nyx-world] | --spec FILE) [--assets OPERATOR_CATALOG_JSON] [--godot GODOT_EXECUTABLE]");
     }
+    if (nyxWorld && !prompt) throw new Error("--nyx-world requires a live --prompt request");
     const catalog = assetFile ? validateGameAssetCatalog(JSON.parse(fs.readFileSync(path.resolve(assetFile), "utf8"))) : undefined;
+    const responseDigests: string[] = [];
+    const client = prompt ? new NemotronClient() : undefined;
     const spec = specFile
         ? validateGameSpec(JSON.parse(fs.readFileSync(path.resolve(specFile), "utf8")))
-        : await designGame(prompt!, new NemotronClient(), catalog);
+        : await designGame(prompt!, { async generate(instruction, maxTokens) {
+            const response = await client!.generate(instruction, maxTokens);
+            responseDigests.push(createHash("sha256").update(response).digest("hex"));
+            return response;
+        } }, catalog, nyxWorld ? { worldArt: true, originalGeometry: true } : {});
     const project = compileGameProject(spec, output, catalog);
+    if (prompt) {
+        fs.writeFileSync(path.join(project, "design-provenance.json"), JSON.stringify({
+            version: 1, source: "live-nemotron-response", model: DEFAULT_NEMOTRON_MODEL,
+            promptSha256: createHash("sha256").update(prompt).digest("hex"),
+            responseSha256: responseDigests[0],
+            specificationSha256: createHash("sha256").update(JSON.stringify(spec)).digest("hex"),
+            requirements: { worldArt: nyxWorld, originalGeometry: nyxWorld },
+        }, null, 2) + "\n");
+    }
     process.stdout.write(`Generated Godot project: ${project}\n`);
     const godot = option("--godot");
     if (godot) {

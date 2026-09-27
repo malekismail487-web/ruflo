@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "title": "Citadel of the River",
+  "world": { "skyColor": "#344359", "groundColor": "#657055", "gravity": 9.8 },
+  "player": { "spawn": [0, 4, 37], "speed": 6, "jumpVelocity": 6 },
+  "props": [],
+  "goals": [{ "id": "citadel_gate", "position": [0, 5, -3] }],
+  "worldArt": {
+    "version": 1,
+    "seed": 1847,
+    "terrain": { "extent": 160, "resolution": 256, "relief": 7, "ridgeStrength": 14, "riverWidth": 5 },
+    "citadel": { "center": [0, -20], "radius": 15, "towerHeight": 23, "towerCount": 8, "palette": "limestone" },
+    "atmosphere": { "timeOfDay": "day", "fogDensity": 0.0002 },
+    "showcaseCamera": { "position": [0, 13, 48], "target": [0, 11, -20], "fov": 61 }
+  }
+}

@@ -1,5 +1,7 @@
 extends Node3D
 
+const WorldArt = preload("res://WorldArt.gd")
+
 # All scene content comes from a validated data specification. No model-authored
 # GDScript, asset path, command, or URL is executed by this runtime.
 var spec: Dictionary
@@ -20,8 +22,14 @@ func _ready() -> void:
 		get_tree().quit(2)
 		return
 	spec = parsed
-	_build_environment()
-	_build_ground()
+	if spec.has("worldArt"):
+		var art := WorldArt.new()
+		art.name = "WorldArt"
+		art.configure(spec["worldArt"])
+		add_child(art)
+	else:
+		_build_environment()
+		_build_ground()
 	_build_player()
 	for prop in spec["props"]:
 		if not _build_prop(prop):
@@ -86,6 +94,7 @@ func _build_player() -> void:
 	capsule_mesh.height = 1.8
 	mesh.mesh = capsule_mesh
 	mesh.material_override = _material("#f3c970")
+	mesh.visible = not spec.has("worldArt")
 	player.add_child(mesh)
 	var collision := CollisionShape3D.new()
 	var capsule := CapsuleShape3D.new()
@@ -95,10 +104,17 @@ func _build_player() -> void:
 	player.add_child(collision)
 	camera = Camera3D.new()
 	camera.name = "FollowCamera"
-	camera.fov = 65.0
-	camera.position = player.position + Vector3(0, 5.5, 9.5)
+	if spec.has("worldArt"):
+		camera.fov = float(spec["worldArt"]["showcaseCamera"]["fov"])
+		camera.position = _v3(spec["worldArt"]["showcaseCamera"]["position"])
+	else:
+		camera.fov = 65.0
+		camera.position = player.position + Vector3(0, 5.5, 9.5)
 	add_child(camera)
-	camera.look_at(player.position + Vector3(0, 1, 0))
+	if spec.has("worldArt"):
+		camera.look_at(_v3(spec["worldArt"]["showcaseCamera"]["target"]))
+	else:
+		camera.look_at(player.position + Vector3(0, 1, 0))
 	camera.current = true
 
 func _build_prop(data: Dictionary) -> bool:
@@ -218,6 +234,7 @@ func _build_goal(data: Dictionary) -> void:
 	glow.emission = Color.html("#ffcc50")
 	glow.emission_energy_multiplier = 2.0
 	mesh.material_override = glow
+	mesh.visible = not spec.has("worldArt")
 	area.add_child(mesh)
 	var collision := CollisionShape3D.new()
 	var sphere_shape := SphereShape3D.new()
@@ -235,6 +252,7 @@ func _build_hud() -> void:
 	hud.add_theme_font_size_override("font_size", 24)
 	layer.add_child(hud)
 	_update_hud()
+	layer.visible = not spec.has("worldArt")
 
 func _update_hud() -> void:
 	hud.text = "%s  |  Goals: %d  |  Move: arrows  Jump: Enter" % [spec["title"], remaining]
@@ -261,5 +279,6 @@ func _physics_process(delta: float) -> void:
 		velocity.y = float(spec["player"]["jumpVelocity"])
 	player.velocity = velocity
 	player.move_and_slide()
-	camera.global_position = camera.global_position.lerp(player.global_position + Vector3(0, 5.5, 9.5), minf(1.0, delta * 5.0))
-	camera.look_at(player.global_position + Vector3(0, 1, 0))
+	if not spec.has("worldArt"):
+		camera.global_position = camera.global_position.lerp(player.global_position + Vector3(0, 5.5, 9.5), minf(1.0, delta * 5.0))
+		camera.look_at(player.global_position + Vector3(0, 1, 0))

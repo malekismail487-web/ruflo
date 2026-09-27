@@ -1,18 +1,19 @@
-import { describe, it, expect } from 'vitest';
-import { NemotronClient } from '../src/core/nemotronClient.js';
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { NemotronClient } from "../src/core/nemotronClient.js";
 
-describe('NemotronClient', () => {
-    it('should initialize with default key when no key or env is provided', () => {
-        const originalEnv = process.env.NVIDIA_API_KEY;
+test("Nemotron refuses to start without a configured credential", () => {
+    const prior = process.env.NVIDIA_API_KEY;
+    try {
         delete process.env.NVIDIA_API_KEY;
-        const client = new NemotronClient();
-        expect(client).toBeInstanceOf(NemotronClient);
-        process.env.NVIDIA_API_KEY = originalEnv;
-    });
+        assert.throws(() => new NemotronClient(), /NVIDIA API Key is required/u);
+    } finally {
+        if (prior === undefined) delete process.env.NVIDIA_API_KEY;
+        else process.env.NVIDIA_API_KEY = prior;
+    }
+});
 
-    it('should initialize successfully with a custom API key', () => {
-        const client = new NemotronClient('test-key');
-        expect(client).toBeInstanceOf(NemotronClient);
-    });
+test("Nemotron accepts an injected credential without contacting the provider", () => {
+    assert.ok(new NemotronClient("synthetic-test-key") instanceof NemotronClient);
 });
 

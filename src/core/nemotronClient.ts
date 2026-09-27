@@ -1,9 +1,11 @@
+export const DEFAULT_NEMOTRON_MODEL = "nvidia/nemotron-3-ultra-550b-a55b";
+
 export class NemotronClient {
     private apiKey: string;
     private baseUrl: string = "https://integrate.api.nvidia.com/v1";
     private model: string;
 
-    constructor(apiKey?: string, model: string = "nvidia/nemotron-3-ultra-550b-a55b") {
+    constructor(apiKey?: string, model: string = DEFAULT_NEMOTRON_MODEL) {
         this.apiKey = apiKey || process.env.NVIDIA_API_KEY || "";
         this.model = model;
         if (!this.apiKey) {
