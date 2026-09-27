@@ -3,6 +3,7 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { GameAssetCatalog, readVerifiedGameAsset, validateGameAssetCatalog } from "./gameAssets.js";
+import { GeometryRecipe, generateGeometry, validateGeometryRecipe } from "./proceduralGeometry.js";
 
 export interface GameSpec {
     version: 1;
@@ -19,6 +20,7 @@ export interface GameSpec {
         mass?: number;
         visualAsset?: string;
     }>;
+    generatedGeometry?: GeometryRecipe[];
     goals: Array<{ id: string; position: [number, number, number] }>;
 }
 
@@ -99,6 +101,15 @@ export function validateGameSpec(input: unknown): GameSpec {
         return { id: uniqueId(goal.id), position };
     });
     if (goals.length === 0) throw new Error("A playable game requires at least one goal");
+    if (raw.generatedGeometry !== undefined && (!Array.isArray(raw.generatedGeometry) || raw.generatedGeometry.length > 4)) {
+        throw new Error("generatedGeometry must contain at most four bounded recipes");
+    }
+    const generatedGeometry = (raw.generatedGeometry as unknown[] | undefined)?.map(validateGeometryRecipe);
+    const generatedIds = new Set<string>();
+    for (const recipe of generatedGeometry ?? []) {
+        if (generatedIds.has(recipe.id)) throw new Error("Generated geometry IDs must be unique");
+        generatedIds.add(recipe.id);
+    }
     const spawn = vector(player.spawn, "player.spawn", -50, 50);
     if (spawn[1] < 1) throw new Error("Player must spawn above the ground collider");
     return {
@@ -115,12 +126,13 @@ export function validateGameSpec(input: unknown): GameSpec {
             jumpVelocity: boundedNumber(player.jumpVelocity, "player.jumpVelocity", 1, 20),
         },
         props,
+        ...(generatedGeometry === undefined ? {} : { generatedGeometry }),
         goals,
     };
 }
 
 export function parseModelGameSpec(output: string): GameSpec {
-    if (output.length > 32768) throw new Error("Model response exceeded the game specification limit");
+    if (output.length > 65536) throw new Error("Model response exceeded the game specification limit");
     let candidate = output.trim();
     if (candidate.startsWith("```")) candidate = candidate.replace(/^```(?:json)?\s*/iu, "").replace(/\s*```$/u, "");
     return validateGameSpec(JSON.parse(candidate));
@@ -131,21 +143,35 @@ export interface GameDesignModel { generate(prompt: string, maxTokens: number): 
 export async function designGame(prompt: string, model: GameDesignModel, catalog?: GameAssetCatalog): Promise<GameSpec> {
     if (prompt.length < 8 || prompt.length > 4000) throw new Error("Prompt must contain 8-4000 characters");
     const availableAssets = catalog ? validateGameAssetCatalog(catalog).assets.map(asset => asset.id) : [];
-    const instruction = `Design a small playable 3D game prototype from the following request. Return ONLY JSON, no code or Markdown. Schema: {"version":1,"title":"short plain text","world":{"skyColor":"#RRGGBB","groundColor":"#RRGGBB","gravity":9.8},"player":{"spawn":[0,2,0],"speed":6,"jumpVelocity":6},"props":[{"id":"crate1","shape":"box|sphere|cylinder","body":"static|dynamic","position":[0,2,0],"size":[1,1,1],"color":"#RRGGBB","mass":2,"visualAsset":"optional-catalog-id"}],"goals":[{"id":"goal1","position":[2,1,0]}]}. Limits: 64 props, 16 goals, world coordinates -100..100, dimensions 0.1..20. Keep the player above ground. Use distinct ids. Available visualAsset IDs: ${JSON.stringify(availableAssets)}. Omit visualAsset if no suitable ID exists. Asset IDs never grant file access. Do not claim photorealistic assets or scientific validity. User request:\n${prompt}`;
-    return parseModelGameSpec(await model.generate(instruction, 4096));
+    const instruction = `Design a small playable 3D game prototype from the following request. Return ONLY JSON, no code or Markdown. Schema: {"version":1,"title":"short plain text","world":{"skyColor":"#RRGGBB","groundColor":"#RRGGBB","gravity":9.8},"player":{"spawn":[0,2,0],"speed":6,"jumpVelocity":6},"props":[{"id":"sculpture","shape":"box|sphere|cylinder","body":"static|dynamic","position":[0,2,0],"size":[2,2,2],"color":"#RRGGBB","mass":2,"visualAsset":"optional-generated-or-catalog-id"}],"generatedGeometry":[{"id":"original_sculpture","resolution":48,"color":"#bdac91","metallic":0.6,"roughness":0.35,"root":{"kind":"subtract","left":{"kind":"sphere","radius":0.8},"right":{"kind":"cylinder","radius":0.25,"halfHeight":0.9}}}],"goals":[{"id":"goal1","position":[2,1,0]}]}. To create original geometry, add up to four generatedGeometry recipes and reference their IDs from props.visualAsset. Geometry is an SDF graph inside normalized coordinates -1..1: sphere(radius), box(halfSize:[x,y,z],roundness), cylinder(radius,halfHeight), torus(majorRadius,minorRadius), union/intersection/subtract/smoothUnion(radius,left,right), translate(offset:[x,y,z],child), rotateY(degrees,child), scale(factor,child), radialArray(count,radius,child). Maximum 48 nodes, depth 12, resolution 20..72; keep all geometry within [-1,1]. Generated geometry is actual mesh generation, not an imported model; use it when the user asks you to create an original asset. Limits: 64 props, 16 goals, world coordinates -100..100, dimensions 0.1..20. Keep the player above ground. Use distinct ids. Approved imported visualAsset IDs, if any: ${JSON.stringify(availableAssets)}. Asset IDs never grant file access. Do not claim photorealism or scientific validity. User request:\n${prompt}`;
+    return parseModelGameSpec(await model.generate(instruction, 8192));
 }
 
 /** Creates a new Godot project atomically; never overwrites an existing output. */
 export function compileGameProject(specInput: unknown, outputDirectory: string, catalogInput?: unknown): string {
     const spec = validateGameSpec(specInput);
     const catalog = catalogInput === undefined ? { version: 1 as const, assets: [] } : validateGameAssetCatalog(catalogInput);
-    const selected = new Map<string, ReturnType<typeof readVerifiedGameAsset> & { id: string; sha256: string; source: string; license: string }>();
+    const selected = new Map<string, ReturnType<typeof readVerifiedGameAsset> & { id: string; sha256: string; source: string; license: string;
+        origin?: "generated" | "imported"; recipeSha256?: string; triangles?: number; vertices?: number }>();
+    const recipes = new Map((spec.generatedGeometry ?? []).map(recipe => [recipe.id, recipe]));
+    for (const asset of catalog.assets) {
+        if (recipes.has(asset.id)) throw new Error(`Generated and imported geometry ID collision: ${asset.id}`);
+    }
     for (const prop of spec.props) {
         if (!prop.visualAsset || selected.has(prop.visualAsset)) continue;
+        const recipe = recipes.get(prop.visualAsset);
+        if (recipe) {
+            const generated = generateGeometry(recipe);
+            selected.set(recipe.id, { id: recipe.id, data: generated.data, sha256: generated.sha256,
+                recipeSha256: generated.recipeSha256, triangles: generated.triangles, vertices: generated.vertices,
+                meshes: 1, materials: 1, origin: "generated", source: "NYX procedural geometry v1",
+                license: "Generated original; downstream rights review required" });
+            continue;
+        }
         const asset = catalog.assets.find(item => item.id === prop.visualAsset);
         if (!asset) throw new Error(`Unregistered visual asset: ${prop.visualAsset}`);
         selected.set(asset.id, { id: asset.id, sha256: asset.sha256, source: asset.source,
-            license: asset.license, ...readVerifiedGameAsset(asset) });
+            license: asset.license, origin: "imported", ...readVerifiedGameAsset(asset) });
     }
     const output = path.resolve(outputDirectory);
     const parent = path.dirname(output);

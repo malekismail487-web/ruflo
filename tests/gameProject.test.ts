@@ -34,7 +34,7 @@ test("model planning is bounded data and produces a playable-engine project with
         async generate(prompt, maxTokens) {
             modelCalls++;
             assert.match(prompt, /orbital yard/u);
-            assert.equal(maxTokens, 4096);
+            assert.equal(maxTokens, 8192);
             return JSON.stringify(sample);
         },
     });
@@ -56,7 +56,7 @@ test("model planning is bounded data and produces a playable-engine project with
 
 test("malformed, oversized, executable and physically invalid model output fails closed", () => {
     assert.throws(() => parseModelGameSpec("not JSON"), SyntaxError);
-    assert.throws(() => parseModelGameSpec("x".repeat(32769)), /limit/u);
+    assert.throws(() => parseModelGameSpec("x".repeat(65537)), /limit/u);
     assert.throws(() => validateGameSpec({ ...sample, title: 'Game"; OS.execute("bad")' }), /plain-text/u);
     assert.throws(() => validateGameSpec({ ...sample, world: { ...sample.world, gravity: Number.NaN } }), /finite/u);
     assert.throws(() => validateGameSpec({ ...sample, props: [...sample.props, { ...sample.props[0], id: "crate_a" }] }), /unique/u);
